@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bookmark Buddy · Privacy Policy</title>
+    <link rel="icon" type="image/png" href="icons/icon-192x192.png" />
+    <style>
+      :root {
+        --bg: #f7f1e6;
+        --card: #fffdf8;
+        --ink: #3b2f25;
+        --muted: #75685c;
+        --moss: #3f5a36;
+        --line: #e6dccb;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          16px/1.6 system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 32px 16px 48px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        padding: 24px 28px;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 1.7rem;
+      }
+      h2 {
+        font-size: 1.1rem;
+        margin: 26px 0 6px;
+        color: var(--moss);
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      a {
+        color: var(--moss);
+      }
+      header {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        margin-bottom: 18px;
+      }
+      header img {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+      }
+      li {
+        margin: 4px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <img src="icons/icon-192x192.png" alt="" />
+        <div>
+          <h1>Privacy Policy</h1>
+          <div class="muted">
+            Bookmark Buddy (website and Chrome / Edge extension) · Last updated
+            October 19, 2026
+          </div>
+        </div>
+      </header>
+      <div class="card">
+        <p>
+          <b>The short version: your bookmarks never leave your device.</b>
+          Bookmark Buddy has no servers, no accounts, no analytics and no ads.
+          It doesn't collect, sell or share any of your data.
+        </p>
+
+        <h2>What Bookmark Buddy reads</h2>
+        <p>
+          The titles and links of your bookmarks, and the folders they're in.
+          The extension reads them with the browser's bookmarks permission. The
+          website only reads a bookmarks file you choose to open. This is used
+          for one purpose: sorting your bookmarks into folders.
+        </p>
+
+        <h2>Where the work happens</h2>
+        <p>
+          All sorting is done by Gemma, an open AI model that runs
+          <i>inside your browser</i> on your own device using WebGPU. Your
+          bookmarks are never sent to Bookmark Buddy, Google, or anyone else.
+          Gemma only sees each bookmark's title and website name, never the full
+          link.
+        </p>
+
+        <h2>What is stored, and where</h2>
+        <ul>
+          <li>
+            <b>On your device only:</b> your settings, a backup of where your
+            bookmarks were (so Undo works), which sites go in which folder (so
+            new bookmarks can be sorted), and your in-progress session.
+          </li>
+          <li>
+            <b>The Gemma model</b> is cached in your browser after a one-time
+            download so it works offline.
+          </li>
+        </ul>
+        <p>
+          Uninstalling the extension or clearing site data removes all of it.
+          The “Remove from device” button deletes the downloaded model.
+        </p>
+
+        <h2>Network requests</h2>
+        <p>
+          The only downloads are the Gemma model files (from Hugging Face) the
+          first time you choose a model. They contain no personal data, and none
+          of your data is sent with them. Bookmark Buddy doesn't fetch favicons
+          or visit your bookmarked pages.
+        </p>
+
+        <h2>What it can't see</h2>
+        <p>
+          The extension has no access to the web pages you visit, your browsing
+          history, passwords or anything else. It only requests the permissions
+          it needs: bookmarks, storage, notifications, offscreen (to run Gemma
+          in the background) and alarms.
+        </p>
+
+        <h2>Changes and contact</h2>
+        <p>
+          If this policy ever changes, the update will be posted on this page.
+          Questions? Open an issue on
+          <a href="https://github.com/tmott13/bookmark-buddy">GitHub</a>.
+        </p>
+      </div>
+    </main>
+  </body>
+</html>

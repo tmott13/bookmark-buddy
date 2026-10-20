@@ -1,0 +1,39 @@
+:root {
+  --moss: #3f5a36;
+  --moss-2: #557a48;
+  --leaf: #dfe9d3;
+  --cream: #fbf6ec;
+  --paper: #fffdf8;
+  --bark: #3b2f25;
+  --muted: #7a6d60;
+  --line: #eadfcc;
+  --peach: #f2a98c;
+  --warn: #fff1d6;
+  --shadow: 0 8px 24px rgba(59, 47, 37, 0.08);
+  color-scheme: light;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  color: var(--bark);
+  background: var(--cream);
+  min-height: 100vh;
+  font-family:
+    ui-rounded,
+    "SF Pro Rounded",
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+}
+a {
+  color: var(--moss-2);
+}

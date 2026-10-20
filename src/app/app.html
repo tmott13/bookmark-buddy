@@ -1,0 +1,658 @@
+<header class="top">
+  <div class="brand">
+    <img class="logo" src="art/logo.webp" alt="" width="56" height="56" />
+    <div>
+      <h1>Bookmark Buddy</h1>
+      <p>Your messy bookmarks, tidied while you put your feet up. 🦥</p>
+    </div>
+  </div>
+  <span class="pill" [class.ok]="ai.state() === 'ready'">
+    @switch (ai.state()) { @case ('ready') { ✨ Gemma ready on this device }
+    @case ('unsupported') { Needs WebGPU } @case ('downloading') { Downloading
+    Gemma… {{ ai.progress() }}% } @case ('loading') { Waking Gemma… {{
+    ai.progress() }}% } @default { Gemma not loaded } }
+  </span>
+</header>
+
+<main>
+  <ol class="steps" aria-label="Progress">
+    <li [class.on]="step() === 'start'">1 · Import</li>
+    <li [class.on]="step() === 'folders'">2 · Folders</li>
+    <li [class.on]="step() === 'sorting'">3 · Sort</li>
+    <li
+      [class.on]="step() === 'review' || step() === 'applying' || step() === 'done'"
+    >
+      4 · Review &amp; {{ ext ? 'apply' : 'download' }}
+    </li>
+  </ol>
+
+  @if (ai.state() !== 'ready' && step() !== 'review' && step() !== 'applying' &&
+  step() !== 'done') { <ng-container *ngTemplateOutlet="gemma" /> } @if
+  (error()) {
+  <p class="banner warn">{{ error() }}</p>
+  } @switch (step()) {
+  <!-- ================= 1. IMPORT ================= -->
+  @case ('start') { @if (ext && (auto()?.barId || hasUndo())) {
+  <ng-container *ngTemplateOutlet="helper" /> }
+  <section class="card start">
+    <img
+      class="hero-art"
+      src="art/sloth-hanging.webp"
+      alt="A sloth hanging from a bookmarks bar"
+      width="180"
+      height="199"
+    />
+    @if (ext) {
+    <h2>Tidy this browser's bookmarks</h2>
+    <p class="muted">
+      Bookmark Buddy reads your bookmarks right here, sorts them with Gemma, and
+      shows you everything before it moves a thing. A backup is saved first, so
+      one click puts it all back.
+    </p>
+    <ul class="plan">
+      <li>✨ Gemma suggests folders that fit <i>your</i> bookmarks</li>
+      <li>🦥 It sorts every bookmark, slow and steady</li>
+      <li>👀 You check it and drag anything that's off</li>
+      <li>
+        🧹 Apply files them in your Bookmarks bar and clears out the empty old
+        folders
+      </li>
+      <li>🔁 From then on, new bookmarks get sorted as you save them</li>
+    </ul>
+    <button class="primary wide" (click)="readMine()">
+      🦥 Read my bookmarks
+    </button>
+    <div class="row center">
+      <button class="ghost" (click)="useSample()">
+        Try it with sample bookmarks first
+      </button>
+    </div>
+    } @else {
+    <h2>Drop in your bookmarks</h2>
+    <p class="muted">
+      Export your bookmarks from your browser as an HTML file, then drop it
+      here. It's read right here in your browser. Nothing is uploaded, and your
+      original file is never changed.
+    </p>
+    <label
+      class="drop"
+      [class.over]="dragOver()"
+      (dragover)="$event.preventDefault(); dragOver.set(true)"
+      (dragleave)="dragOver.set(false)"
+      (drop)="onDrop($event)"
+    >
+      <input
+        type="file"
+        accept=".html,.htm,text/html"
+        (change)="onFile($event)"
+      />
+      <span class="big">📂</span>
+      <b>Drop your bookmarks file here</b>
+      <span class="muted">or click to choose it</span>
+    </label>
+    <div class="row center">
+      <button class="ghost" (click)="useSample()">
+        Try it with sample bookmarks
+      </button>
+    </div>
+    <details class="how">
+      <summary>How do I export my bookmarks?</summary>
+      <ul>
+        <li>
+          <b>Chrome / Edge:</b> open the Bookmark manager (⌘⌥B on Mac,
+          Ctrl+Shift+O on Windows) → ⋮ menu → <i>Export bookmarks</i>.
+        </li>
+        <li><b>Safari:</b> File → Export → <i>Bookmarks…</i></li>
+        <li>
+          <b>Firefox:</b> Bookmarks → Manage bookmarks → Import and Backup →
+          <i>Export Bookmarks to HTML…</i>
+        </li>
+      </ul>
+    </details>
+    <p class="muted small">
+      Want it fully automatic? Install the Bookmark Buddy extension for Chrome
+      or Edge. It tidies your bookmarks in place and sorts new ones as you save
+      them.
+    </p>
+    }
+  </section>
+  }
+
+  <!-- ================= 2. FOLDERS ================= -->
+  @case ('folders') {
+  <section class="card">
+    <div class="facts">
+      <div><b>{{ stats().total }}</b><span>bookmarks</span></div>
+      <div><b>{{ oldFolderCount() }}</b><span>old folders</span></div>
+      <div><b>{{ stats().duplicates }}</b><span>duplicates found</span></div>
+      <div><b>{{ stats().flagged }}</b><span>old dev links</span></div>
+    </div>
+    <p class="muted small">
+      Duplicates and old localhost links go into <b>{{ MAYBE }}</b> so you can
+      decide. Nothing gets deleted. @if (stats().skipped) { {{ stats().skipped
+      }} bookmarklets or browser-only links were left out of sorting. }
+    </p>
+  </section>
+
+  <section class="card">
+    <div class="row-between">
+      <h2>Your new folders</h2>
+      @if (ai.state() === 'ready') {
+      <button
+        class="ghost small"
+        (click)="suggestFolders()"
+        [disabled]="!!busy()"
+      >
+        ↻ Suggest again
+      </button>
+      }
+    </div>
+    @if (busy()) {
+    <p class="thinking">
+      {{ busy() }} <span class="dots"><i></i><i></i><i></i></span>
+    </p>
+    } @else if (!folders().length) {
+    <p class="muted">
+      Load Gemma above and it'll suggest folders based on your bookmarks. You
+      can also add your own.
+    </p>
+    } @else {
+    <p class="muted small">
+      Rename, remove or add folders until they feel right. Anything that doesn't
+      fit goes in “{{ OTHER }}”.
+    </p>
+    }
+    <div class="folders">
+      @for (f of folders(); track f) {
+      <span class="fchip">
+        <input
+          [value]="f"
+          (change)="renameFolder(f, $event)"
+          [attr.aria-label]="'Folder name ' + f"
+          [style.width.ch]="f.length + 2"
+        />
+        <button
+          class="x"
+          (click)="removeFolder(f)"
+          [attr.aria-label]="'Remove ' + f"
+        >
+          ✕
+        </button>
+      </span>
+      }
+      <span class="fchip add">
+        <input
+          #nf
+          placeholder="+ Add a folder"
+          (keydown.enter)="addFolder(nf)"
+          aria-label="New folder name"
+        />
+      </span>
+    </div>
+    <button
+      class="primary wide"
+      (click)="sortAll()"
+      [disabled]="ai.state() !== 'ready' || !folders().length || !!busy()"
+    >
+      🦥 Sort my {{ stats().total }} bookmarks
+    </button>
+    <div class="row center">
+      <button class="link" (click)="startOver()">
+        {{ fromBrowser() ? 'Start over' : 'Use a different file' }}
+      </button>
+    </div>
+  </section>
+  }
+
+  <!-- ================= 3. SORTING ================= -->
+  @case ('sorting') {
+  <section class="card sorting">
+    <img
+      class="nap-art"
+      src="art/sloth-napping.webp"
+      alt="A sloth napping while hugging a bookmark"
+      width="200"
+      height="221"
+    />
+    <h2>Sorting, slow and steady…</h2>
+    <progress max="100" [value]="percent()"></progress>
+    <p>
+      <b>{{ done() }}</b> of {{ todo() }} bookmarks · {{ eta() || 'Getting
+      started' }}
+    </p>
+    <p class="muted small">
+      Gemma sorts a dozen at a time. Once a site has a folder, the rest of its
+      bookmarks follow it automatically. Feel free to grab a snack.
+    </p>
+    <button class="ghost" (click)="stop()">Stop and review what's done</button>
+  </section>
+  }
+
+  <!-- ================= 4. REVIEW ================= -->
+  @case ('review') {
+  <section class="card summary">
+    <img
+      class="tidy-art"
+      src="art/sloth-tidy.webp"
+      alt="A sloth waving, holding a broom"
+      width="150"
+      height="166"
+    />
+    <h2>🎉 All tidy!</h2>
+    <p>
+      Sorted <b>{{ stats().total }}</b> bookmarks into
+      <b>{{ folders().length }}</b> folders@if (stats().seconds) { in {{
+      stats().seconds }} seconds}. Gemma sorted {{ stats().gemma }}, {{
+      stats().memory }} followed their site, and {{ stats().duplicates }}
+      duplicates are waiting in “{{ MAYBE }}”. @if (trash().length) {
+      <b>{{ trash().length }}</b> marked to delete. }
+    </p>
+    @if (ext && fromBrowser()) {
+    <p class="muted small">
+      Happy with it? Apply moves your real bookmarks into these folders in your
+      Bookmarks bar and clears out the empty old folders. Only bookmarks you
+      picked get deleted, and a backup is saved first so you can undo
+      everything.
+    </p>
+    }
+    <div class="row">
+      @if (ext && fromBrowser()) {
+      <button class="primary" (click)="apply()">
+        ✨ Apply to my bookmarks
+      </button>
+      <button class="ghost" (click)="download()">
+        ⬇ Download a copy instead
+      </button>
+      } @else {
+      <button class="primary" (click)="download()">
+        ⬇ Download tidy bookmarks
+      </button>
+      } @if (ai.state() === 'ready') {
+      <button class="ghost" (click)="step.set('folders')">
+        Change folders &amp; re-sort
+      </button>
+      }
+      <button class="link" (click)="startOver()">Start over</button>
+    </div>
+    @if (!fromBrowser()) {
+    <details class="how">
+      <summary>How do I put them back in my browser?</summary>
+      <ul>
+        <li>
+          <b>Chrome / Edge:</b> Bookmark manager → ⋮ menu →
+          <i>Import bookmarks</i>, then pick the downloaded file.
+        </li>
+        <li><b>Safari:</b> File → Import From → <i>Bookmarks HTML File…</i></li>
+        <li>
+          <b>Firefox:</b> Manage bookmarks → Import and Backup →
+          <i>Import Bookmarks from HTML…</i>
+        </li>
+      </ul>
+      <p class="muted small">
+        Your browser adds them as one new folder and leaves your old bookmarks
+        alone. Once you're happy, delete the old messy folders yourself.
+      </p>
+    </details>
+    }
+  </section>
+
+  <div class="row-between tools">
+    <input
+      class="search"
+      type="search"
+      placeholder="Search bookmarks…"
+      (input)="setFilter($event)"
+      aria-label="Search bookmarks"
+    />
+    <span class="muted small"
+      >Drag bookmarks to move or reorder them, or 🗑 to delete. Drag a folder's ⠿
+      handle (or use ↑ ↓) to reorder folders.</span
+    >
+  </div>
+
+  <div class="groups">
+    @for (col of columns(); track $index) {
+    <div class="col">
+      @for (g of col; track g.name) {
+      <section
+        class="card group"
+        [class.maybe]="g.name === MAYBE"
+        [class.target]="dropTarget() === g.name"
+        [class.dragmode]="dragging() !== null"
+        [class.ftarget]="folderTarget() === g.name && draggingFolder() !== g.name"
+        [class.flifted]="draggingFolder() === g.name"
+        (dragover)="onDragOverGroup(g.name, $event)"
+        (dragleave)="onDragLeaveGroup($event)"
+        (drop)="onDropGroup(g.name, $event)"
+      >
+        <h3
+          [attr.draggable]="movable(g.name) ? 'true' : null"
+          [class.fgrab]="movable(g.name)"
+          (dragstart)="onFolderDragStart(g.name, $event)"
+          (dragend)="onDragEnd()"
+        >
+          @if (movable(g.name)) {
+          <span class="grip" aria-hidden="true" title="Drag to reorder folders"
+            >⠿</span
+          >
+          } {{ g.name === MAYBE ? '🤔' : g.name === OTHER ? '📦' : '📁' }} {{
+          g.name }} <span class="count">{{ g.items.length }}</span>
+          @if (g.name === MAYBE && g.items.length) {
+          <button
+            class="mini wide-mini"
+            (click)="deleteFolderContents(g.name)"
+            title="Delete everything in this folder"
+          >
+            🗑 All
+          </button>
+          } @if (movable(g.name)) {
+          <span class="order">
+            <button
+              class="mini"
+              (click)="nudgeFolder(g.name, -1)"
+              [disabled]="folders().indexOf(g.name) === 0"
+              [attr.aria-label]="'Move ' + g.name + ' folder earlier'"
+            >
+              ↑
+            </button>
+            <button
+              class="mini"
+              (click)="nudgeFolder(g.name, 1)"
+              [disabled]="folders().indexOf(g.name) === folders().length - 1"
+              [attr.aria-label]="'Move ' + g.name + ' folder later'"
+            >
+              ↓
+            </button>
+          </span>
+          }
+        </h3>
+        <div class="items" [class.long]="g.items.length > 7">
+          @for (b of g.items; track b.id; let first = $first, last = $last) {
+          <div
+            class="bm"
+            draggable="true"
+            [class.lifted]="dragging() === b.id"
+            [class.before]="dropBefore() === b.id && dragging() !== null"
+            (dragstart)="onDragStart(b, $event)"
+            (dragend)="onDragEnd()"
+            (dragover)="onDragOverRow(b, $event)"
+          >
+            <span class="grip" aria-hidden="true">⠿</span>
+            <span
+              class="av"
+              [style.background]="'hsl(' + hue(b) + ' 45% 88%)'"
+              [style.color]="'hsl(' + hue(b) + ' 45% 30%)'"
+              >{{ initial(b) }}</span
+            >
+            <div class="txt">
+              <a
+                [href]="b.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                draggable="false"
+                >{{ b.title }}</a
+              >
+              <span class="dom"
+                >{{ b.domain }}@if (b.why) { · <i>{{ b.why }}</i> }</span
+              >
+            </div>
+            <span class="order rows">
+              <button
+                class="mini"
+                (click)="nudgeBookmark(b, -1)"
+                [disabled]="first"
+                [attr.aria-label]="'Move ' + b.title + ' up'"
+              >
+                ↑
+              </button>
+              <button
+                class="mini"
+                (click)="nudgeBookmark(b, 1)"
+                [disabled]="last"
+                [attr.aria-label]="'Move ' + b.title + ' down'"
+              >
+                ↓
+              </button>
+            </span>
+            <button
+              class="mini del"
+              (click)="deleteBookmark(b)"
+              [attr.aria-label]="'Delete ' + b.title"
+              title="Delete"
+            >
+              🗑
+            </button>
+            <select
+              (change)="move(b, $event)"
+              [attr.aria-label]="'Move ' + b.title"
+            >
+              @for (f of allFolders(); track f) {
+              <option [value]="f" [selected]="f === (b.folder || OTHER)">
+                {{ f }}
+              </option>
+              }
+            </select>
+          </div>
+          } @empty {
+          <p class="muted small empty">
+            {{ dragging() !== null ? 'Drop here' : 'Empty' }}
+          </p>
+          }
+        </div>
+      </section>
+      }
+    </div>
+    }
+  </div>
+
+  @if (trash().length) {
+  <section class="card trash">
+    <div class="row-between">
+      <h3>🗑 To delete <span class="count">{{ trash().length }}</span></h3>
+      <button class="ghost small" (click)="restoreAll()">Restore all</button>
+    </div>
+    <p class="muted small">
+      {{ ext && fromBrowser() ? 'These get deleted from your browser when you
+      apply. Undo everything brings them back.' : 'These are left out of your
+      tidy file.' }}
+    </p>
+    <div class="items">
+      @for (b of trash(); track b.id) {
+      <div class="bm gone">
+        <span
+          class="av"
+          [style.background]="'hsl(' + hue(b) + ' 45% 88%)'"
+          [style.color]="'hsl(' + hue(b) + ' 45% 30%)'"
+          >{{ initial(b) }}</span
+        >
+        <div class="txt">
+          <span class="t">{{ b.title }}</span
+          ><span class="dom">{{ b.domain }}</span>
+        </div>
+        <button
+          class="ghost small"
+          (click)="restore(b)"
+          [attr.aria-label]="'Restore ' + b.title"
+        >
+          Restore
+        </button>
+      </div>
+      }
+    </div>
+  </section>
+  } }
+
+  <!-- ================= 5. APPLYING (extension) ================= -->
+  @case ('applying') {
+  <section class="card sorting">
+    <img
+      class="nap-art"
+      src="art/sloth-napping.webp"
+      alt="A sloth napping while hugging a bookmark"
+      width="200"
+      height="221"
+    />
+    <h2>Moving your bookmarks…</h2>
+    <progress max="100" [value]="percent()"></progress>
+    <p><b>{{ done() }}</b> of {{ todo() }} moved</p>
+    <p class="muted small">
+      Your backup is already saved. Please keep this tab open for a moment.
+    </p>
+  </section>
+  }
+
+  <!-- ================= 6. DONE (extension) ================= -->
+  @case ('done') {
+  <section class="card summary">
+    <img
+      class="tidy-art"
+      src="art/sloth-tidy.webp"
+      alt="A sloth waving, holding a broom"
+      width="150"
+      height="166"
+    />
+    @if (applied(); as r) {
+    <h2>🎉 Your bookmarks are tidy!</h2>
+    <p>
+      Moved <b>{{ r.moved }}</b> bookmarks into <b>{{ r.folders }}</b> folders
+      in your Bookmarks bar and cleared out <b>{{ r.removedFolders }}</b> empty
+      old folder{{ r.removedFolders === 1 ? '' : 's' }}. @if (r.deleted) {
+      Deleted <b>{{ r.deleted }}</b> bookmark{{ r.deleted === 1 ? '' : 's' }}
+      you picked. } @if (stats().duplicates) { {{ stats().duplicates }}
+      duplicate{{ stats().duplicates === 1 ? ' is' : 's are' }} waiting in “{{
+      MAYBE }}” for you to decide. }
+    </p>
+    <p class="muted small">
+      From now on, save a bookmark to your Bookmarks bar and Buddy will file it
+      for you.
+    </p>
+    } @else {
+    <h2>Something went sideways</h2>
+    }
+    <div class="row">
+      <button class="primary" (click)="startOver()">Done</button>
+    </div>
+  </section>
+  <ng-container *ngTemplateOutlet="helper" />
+  } } @if ((ai.state() === 'ready' || step() === 'done') && step() !== 'sorting'
+  && step() !== 'applying') { <ng-container *ngTemplateOutlet="gemma" /> }
+</main>
+
+<footer>
+  Built for the DEV Hacktoberfest Open-Source AI Challenge, Week 3: Slow and
+  Steady · Gemma via
+  <a href="https://webllm.mlc.ai" target="_blank" rel="noopener">WebLLM</a> ·
+  Your bookmarks never leave your device.
+</footer>
+
+<ng-template #helper>
+  <section class="card helper">
+    <h2>🦥 Bookmark Buddy is on duty</h2>
+    @if (auto(); as a) {
+    <label class="toggle">
+      <input
+        type="checkbox"
+        [checked]="a.enabled"
+        (change)="toggleAuto()"
+        [disabled]="!a.barId"
+      />
+      <span
+        ><b>Sort new bookmarks automatically</b><br />
+        <span class="muted small"
+          >Save a bookmark anywhere in your Bookmarks bar and Buddy files it for
+          you, with an Undo button in the notification. Bookmarks you save
+          straight into a folder are left alone, and Buddy learns from
+          them.</span
+        ></span
+      >
+    </label>
+    @if (!a.model) {
+    <p class="muted small">
+      Load Gemma on this page once so new bookmarks can be sorted. Until then,
+      they wait in “{{ NEEDS_HOME }}”.
+    </p>
+    } } @if (waiting().length) {
+    <div class="row-between waiting">
+      <span
+        ><b>{{ waiting().length }}</b> bookmark{{ waiting().length === 1 ? ' is'
+        : 's are' }} waiting in “{{ NEEDS_HOME }}”</span
+      >
+      <button
+        class="ghost small"
+        (click)="sortWaiting()"
+        [disabled]="ai.state() !== 'ready' || !!busy()"
+      >
+        Sort them now
+      </button>
+    </div>
+    } @if (busy()) {
+    <p class="thinking">
+      {{ busy() }} <span class="dots"><i></i><i></i><i></i></span>
+    </p>
+    } @if (hasUndo()) {
+    <div class="row">
+      <button class="link danger" (click)="undoAll()" [disabled]="!!busy()">
+        ↶ Undo everything
+      </button>
+      <span class="muted small"
+        >Puts every bookmark back exactly where it was.</span
+      >
+    </div>
+    }
+  </section>
+</ng-template>
+
+<ng-template #gemma>
+  <section class="card gemma">
+    <h2>✨ Gemma, running on your device</h2>
+    @switch (ai.state()) { @case ('unsupported') {
+    <p class="muted">
+      This browser doesn't have WebGPU, so Gemma can't run here. Try Chrome or
+      Edge on a laptop, or Safari on iOS 26 or later.
+    </p>
+    } @case ('ready') {
+    <p>
+      ✓ Ready · <code>{{ ai.modelId() }}</code> · works offline from here on.
+    </p>
+    <div class="row">
+      @for (m of ai.choices(); track m.id) { @if (m.id !== ai.modelId()) {
+      <button class="ghost small" (click)="ai.load(m.id)">
+        Switch to {{ m.label }}
+      </button>
+      } }
+      <button class="ghost small" (click)="ai.remove()">
+        Remove from device
+      </button>
+    </div>
+    } @case ('downloading') {
+    <p>
+      Downloading… {{ ai.progress() }}%
+      <span class="muted">(one time only)</span>
+    </p>
+    <progress max="100" [value]="ai.progress()"></progress>
+    <p class="muted tiny">{{ ai.status() }}</p>
+    } @case ('loading') {
+    <p>Waking Gemma up… {{ ai.progress() }}%</p>
+    <progress max="100" [value]="ai.progress()"></progress>
+    } @default { @if (ai.state() === 'error') {
+    <p class="muted">
+      Gemma couldn't load. {{ ai.crashed() ? 'Close other tabs and apps to free
+      up memory, then try again.' : '' }}
+    </p>
+    <p class="muted tiny">{{ ai.status() }}</p>
+    } @else {
+    <p class="muted">
+      Pick a model to download once (on Wi-Fi). After that it's cached in your
+      browser and works offline. Your bookmarks are never sent anywhere.
+    </p>
+    }
+    <div class="models">
+      @for (m of ai.choices(); track m.id) {
+      <button class="model" (click)="ai.load(m.id)" [disabled]="!online()">
+        <b>{{ m.label }}</b><span>{{ m.size }} · {{ m.note }}</span>
+      </button>
+      }
+    </div>
+    } }
+  </section>
+</ng-template>

@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Bookmark Buddy",
+  "short_name": "Bookmark Buddy",
+  "version": "1.0.0",
+  "description": "Tidies your messy bookmarks with Gemma running on your device, then sorts new ones as you save them. Nothing is uploaded.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "Open Bookmark Buddy",
+    "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png" }
+  },
+  "background": { "service_worker": "background.js", "type": "module" },
+  "permissions": [
+    "bookmarks",
+    "storage",
+    "unlimitedStorage",
+    "notifications",
+    "offscreen",
+    "alarms"
+  ],
+  "minimum_chrome_version": "116",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
+}

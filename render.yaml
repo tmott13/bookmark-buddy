@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: bookmark-buddy
+    runtime: static
+    buildCommand: npm ci --include=dev && npm run build
+    staticPublishPath: dist/bookmark-buddy/browser
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
