@@ -2,7 +2,7 @@
 
 <img src="public/art/sloth-hanging.webp" alt="Bookmark Buddy sloth" width="160" align="right" />
 
-**Your messy bookmarks, tidied while you put your feet up.**
+**Your messy bookmarks, tidied while you put your feet up.** Meet Mochi, the sloth who does the tidying 🦥🍡
 
 Drop in your browser's bookmarks export and Bookmark Buddy sorts everything into clean folders, catches duplicates, and gives you a tidy file to import back. The sorting is done by **Gemma running in your browser** with [WebLLM](https://webllm.mlc.ai), so your bookmarks (your banks, job searches, health sites…) never leave your device.
 

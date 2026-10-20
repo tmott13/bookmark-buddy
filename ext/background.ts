@@ -96,7 +96,7 @@ async function notify(id: string, node: any, folder: string, why: string) {
   chrome.notifications.create(nid, {
     type: "basic",
     iconUrl: "icons/icon128.png",
-    title: `🦥 Filed in “${folder}”`,
+    title: `🦥 Mochi filed this in “${folder}”`,
     message: `${(node.title || node.url).slice(0, 80)}\n${why}`,
     buttons: [{ title: "Undo" }],
     priority: 0,

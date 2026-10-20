@@ -38,16 +38,16 @@
     <img
       class="hero-art"
       src="art/sloth-hanging.webp"
-      alt="A sloth hanging from a bookmarks bar"
+      alt="Mochi the sloth hanging from a bookmarks bar"
       width="180"
       height="199"
     />
     @if (ext) {
     <h2>Tidy this browser's bookmarks</h2>
     <p class="muted">
-      Bookmark Buddy reads your bookmarks right here, sorts them with Gemma, and
-      shows you everything before it moves a thing. A backup is saved first, so
-      one click puts it all back.
+      Meet Mochi 🦥 Mochi reads your bookmarks right here, sorts them with
+      Gemma, and shows you everything before it moves a thing. A backup is saved
+      first, so one click puts it all back.
     </p>
     <ul class="plan">
       <li>✨ Gemma suggests folders that fit <i>your</i> bookmarks</li>
@@ -70,9 +70,9 @@
     } @else {
     <h2>Drop in your bookmarks</h2>
     <p class="muted">
-      Export your bookmarks from your browser as an HTML file, then drop it
-      here. It's read right here in your browser. Nothing is uploaded, and your
-      original file is never changed.
+      Export your bookmarks from your browser as an HTML file, then drop it here
+      and Mochi 🦥 takes it from there. It's read right here in your browser.
+      Nothing is uploaded, and your original file is never changed.
     </p>
     <label
       class="drop"
@@ -210,11 +210,11 @@
     <img
       class="nap-art"
       src="art/sloth-napping.webp"
-      alt="A sloth napping while hugging a bookmark"
+      alt="Mochi the sloth napping while hugging a bookmark"
       width="200"
       height="221"
     />
-    <h2>Sorting, slow and steady…</h2>
+    <h2>Mochi is sorting, slow and steady…</h2>
     <progress max="100" [value]="percent()"></progress>
     <p>
       <b>{{ done() }}</b> of {{ todo() }} bookmarks · {{ eta() || 'Getting
@@ -234,11 +234,11 @@
     <img
       class="tidy-art"
       src="art/sloth-tidy.webp"
-      alt="A sloth waving, holding a broom"
+      alt="Mochi the sloth waving, holding a broom"
       width="150"
       height="166"
     />
-    <h2>🎉 All tidy!</h2>
+    <h2>🎉 All tidy! Mochi’s done.</h2>
     <p>
       Sorted <b>{{ stats().total }}</b> bookmarks into
       <b>{{ folders().length }}</b> folders@if (stats().seconds) { in {{
@@ -488,11 +488,11 @@
     <img
       class="nap-art"
       src="art/sloth-napping.webp"
-      alt="A sloth napping while hugging a bookmark"
+      alt="Mochi the sloth napping while hugging a bookmark"
       width="200"
       height="221"
     />
-    <h2>Moving your bookmarks…</h2>
+    <h2>Mochi is moving your bookmarks…</h2>
     <progress max="100" [value]="percent()"></progress>
     <p><b>{{ done() }}</b> of {{ todo() }} moved</p>
     <p class="muted small">
@@ -507,7 +507,7 @@
     <img
       class="tidy-art"
       src="art/sloth-tidy.webp"
-      alt="A sloth waving, holding a broom"
+      alt="Mochi the sloth waving, holding a broom"
       width="150"
       height="166"
     />
@@ -523,7 +523,7 @@
       MAYBE }}” for you to decide. }
     </p>
     <p class="muted small">
-      From now on, save a bookmark to your Bookmarks bar and Buddy will file it
+      From now on, save a bookmark to your Bookmarks bar and Mochi will file it
       for you.
     </p>
     } @else {
@@ -547,7 +547,7 @@
 
 <ng-template #helper>
   <section class="card helper">
-    <h2>🦥 Bookmark Buddy is on duty</h2>
+    <h2>🦥 Mochi is on duty</h2>
     @if (auto(); as a) {
     <label class="toggle">
       <input
@@ -559,9 +559,9 @@
       <span
         ><b>Sort new bookmarks automatically</b><br />
         <span class="muted small"
-          >Save a bookmark anywhere in your Bookmarks bar and Buddy files it for
+          >Save a bookmark anywhere in your Bookmarks bar and Mochi files it for
           you, with an Undo button in the notification. Bookmarks you save
-          straight into a folder are left alone, and Buddy learns from
+          straight into a folder are left alone, and Mochi learns from
           them.</span
         ></span
       >
