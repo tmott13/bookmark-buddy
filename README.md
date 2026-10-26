@@ -79,7 +79,7 @@ Load the `extension` folder with **Load unpacked**. The zip has `manifest.json` 
 
 `render.yaml` defines a free static site. In Render: **New → Blueprint**, pick this repo, and deploy.
 
-## Coming in 1.1
+## Coming in 1.1.0
 
 - Chrome Web Store and Edge Add-ons listings (one-click install, automatic updates)
 - Right-click "Ask Mochi to file this" for any bookmark
