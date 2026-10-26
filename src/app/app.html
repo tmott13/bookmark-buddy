@@ -143,11 +143,36 @@
         (click)="suggestFolders()"
         [disabled]="!!busy()"
       >
-        ↻ Suggest again
+        ↻ {{ keptCount() ? 'Use Gemma’s folders instead' : 'Suggest again' }}
       </button>
       }
     </div>
-    @if (busy()) {
+    @if (ownFolders().length) {
+    <div class="choice">
+      @if (keptCount()) {
+      <span
+        >📂 Keeping your folders. <b>{{ keptCount() }}</b> bookmarks stay where
+        they are; Mochi only sorts the loose ones.</span
+      >
+      @if (ai.state() === 'ready') {
+      <button
+        class="ghost small"
+        (click)="suggestFolders('add')"
+        [disabled]="!!busy()"
+      >
+        ✨ Add Gemma’s ideas
+      </button>
+      } } @else {
+      <span
+        >You already have <b>{{ ownFolders().length }}</b> folders and
+        subfolders. Want to keep them and only sort the loose bookmarks?</span
+      >
+      <button class="ghost small" (click)="keepMine()" [disabled]="!!busy()">
+        📂 Keep my folders
+      </button>
+      }
+    </div>
+    } @if (busy()) {
     <p class="thinking">
       {{ busy() }} <span class="dots"><i></i><i></i><i></i></span>
     </p>
@@ -158,18 +183,20 @@
     </p>
     } @else {
     <p class="muted small">
-      Rename, remove or add folders until they feel right. Anything that doesn't
-      fit goes in “{{ OTHER }}”.
+      Rename, remove or add folders until they feel right. ↳ marks a subfolder.
+      You can add subfolders, or have Gemma suggest them, on the review screen.
+      Anything that doesn't fit goes in “{{ OTHER }}”.
     </p>
     }
     <div class="folders">
       @for (f of folders(); track f) {
-      <span class="fchip">
+      <span class="fchip" [class.sub]="isSub(f)">
+        @if (isSub(f)) { <span class="sub-mark" aria-hidden="true">↳</span> }
         <input
-          [value]="f"
+          [value]="labelOf(f)"
           (change)="renameFolder(f, $event)"
           [attr.aria-label]="'Folder name ' + f"
-          [style.width.ch]="f.length + 2"
+          [style.width.ch]="labelOf(f).length + 2"
         />
         <button
           class="x"
@@ -221,7 +248,8 @@
       started' }}
     </p>
     <p class="muted small">
-      Gemma sorts a dozen at a time. Once a site has a folder, the rest of its
+      Gemma sorts a few at a time, and obvious ones (like a recipe going to
+      Recipes) are filed right away. Once a site has a folder, the rest of its
       bookmarks follow it automatically. Feel free to grab a snack.
     </p>
     <button class="ghost" (click)="stop()">Stop and review what's done</button>
@@ -242,7 +270,9 @@
     <p>
       Sorted <b>{{ stats().total }}</b> bookmarks into
       <b>{{ folders().length }}</b> folders@if (stats().seconds) { in {{
-      stats().seconds }} seconds}. Gemma sorted {{ stats().gemma }}, {{
+      stats().seconds }} seconds}. @if (stats().kept) { {{ stats().kept }}
+      stayed in your own folders, } Gemma sorted {{ stats().gemma }}, @if
+      (stats().keyword) { {{ stats().keyword }} matched a folder name, } {{
       stats().memory }} followed their site, and {{ stats().duplicates }}
       duplicates are waiting in “{{ MAYBE }}”. @if (trash().length) {
       <b>{{ trash().length }}</b> marked to delete. }
@@ -297,16 +327,26 @@
   </section>
 
   <div class="row-between tools">
-    <input
-      class="search"
-      type="search"
-      placeholder="Search bookmarks…"
-      (input)="setFilter($event)"
-      aria-label="Search bookmarks"
-    />
+    <div class="tool-row">
+      <input
+        class="search"
+        type="search"
+        placeholder="Search bookmarks…"
+        (input)="setFilter($event)"
+        aria-label="Search bookmarks"
+      />
+      <input
+        #rf
+        class="search add-folder"
+        placeholder="+ Add a folder"
+        maxlength="28"
+        (keydown.enter)="addFolder(rf)"
+        aria-label="New folder name"
+      />
+    </div>
     <span class="muted small"
       >Drag bookmarks to move or reorder them, or 🗑 to delete. Drag a folder's ⠿
-      handle (or use ↑ ↓) to reorder folders.</span
+      handle (or use ↑ ↓) to reorder folders, ✎ to rename.</span
     >
   </div>
 
@@ -326,8 +366,8 @@
         (drop)="onDropGroup(g.name, $event)"
       >
         <h3
-          [attr.draggable]="movable(g.name) ? 'true' : null"
-          [class.fgrab]="movable(g.name)"
+          [attr.draggable]="movable(g.name) && editing() !== g.name ? 'true' : null"
+          [class.fgrab]="movable(g.name) && editing() !== g.name"
           (dragstart)="onFolderDragStart(g.name, $event)"
           (dragend)="onDragEnd()"
         >
@@ -335,8 +375,30 @@
           <span class="grip" aria-hidden="true" title="Drag to reorder folders"
             >⠿</span
           >
-          } {{ g.name === MAYBE ? '🤔' : g.name === OTHER ? '📦' : '📁' }} {{
-          g.name }} <span class="count">{{ g.items.length }}</span>
+          } {{ g.name === MAYBE ? '🤔' : g.name === OTHER ? '📦' : '📁' }} @if
+          (editing() === g.name) {
+          <input
+            class="rename"
+            [value]="g.name"
+            maxlength="28"
+            [attr.aria-label]="'Rename ' + g.name"
+            (keydown.enter)="$any($event.target).blur()"
+            (keydown.escape)="editing.set(null)"
+            (blur)="finishRename(g.name, $event)"
+          />
+          } @else {
+          <span class="fname">{{ g.name }}</span>
+          @if (movable(g.name)) {
+          <button
+            class="mini"
+            (click)="startRename(g.name)"
+            [attr.aria-label]="'Rename ' + g.name"
+            title="Rename"
+          >
+            ✎
+          </button>
+          } }
+          <span class="count">{{ g.items.length }}</span>
           @if (g.name === MAYBE && g.items.length) {
           <button
             class="mini wide-mini"
@@ -350,7 +412,7 @@
             <button
               class="mini"
               (click)="nudgeFolder(g.name, -1)"
-              [disabled]="folders().indexOf(g.name) === 0"
+              [disabled]="edge(g.name, -1)"
               [attr.aria-label]="'Move ' + g.name + ' folder earlier'"
             >
               ↑
@@ -358,87 +420,127 @@
             <button
               class="mini"
               (click)="nudgeFolder(g.name, 1)"
-              [disabled]="folders().indexOf(g.name) === folders().length - 1"
+              [disabled]="edge(g.name, 1)"
               [attr.aria-label]="'Move ' + g.name + ' folder later'"
             >
               ↓
+            </button>
+            <button
+              class="mini del-folder"
+              (click)="removeFolderFromReview(g.name)"
+              [attr.aria-label]="'Remove the ' + g.name + ' folder'"
+              title="Remove folder"
+            >
+              ✕
             </button>
           </span>
           }
         </h3>
         <div class="items" [class.long]="g.items.length > 7">
           @for (b of g.items; track b.id; let first = $first, last = $last) {
-          <div
-            class="bm"
-            draggable="true"
-            [class.lifted]="dragging() === b.id"
-            [class.before]="dropBefore() === b.id && dragging() !== null"
-            (dragstart)="onDragStart(b, $event)"
-            (dragend)="onDragEnd()"
-            (dragover)="onDragOverRow(b, $event)"
-          >
-            <span class="grip" aria-hidden="true">⠿</span>
-            <span
-              class="av"
-              [style.background]="'hsl(' + hue(b) + ' 45% 88%)'"
-              [style.color]="'hsl(' + hue(b) + ' 45% 30%)'"
-              >{{ initial(b) }}</span
+          <ng-container
+            *ngTemplateOutlet="row; context: { $implicit: b, first, last }"
+          />
+          } @empty { @if (!g.subs.length || dragging() !== null) {
+          <p class="muted small empty">
+            {{ dragging() !== null ? 'Drop here' : 'Empty' }}
+          </p>
+          } }
+        </div>
+
+        @for (sf of g.subs; track sf.name) {
+        <div
+          class="subgroup"
+          [class.target]="dropTarget() === sf.name"
+          (dragover)="$event.stopPropagation(); onDragOverGroup(sf.name, $event)"
+          (dragleave)="$event.stopPropagation(); onDragLeaveGroup($event)"
+          (drop)="$event.stopPropagation(); onDropGroup(sf.name, $event)"
+        >
+          <h4>
+            <span aria-hidden="true">↳ 📂</span>
+            @if (editing() === sf.name) {
+            <input
+              class="rename"
+              [value]="sf.label"
+              maxlength="28"
+              [attr.aria-label]="'Rename ' + sf.label"
+              (keydown.enter)="$any($event.target).blur()"
+              (keydown.escape)="editing.set(null)"
+              (blur)="finishRename(sf.name, $event)"
+            />
+            } @else {
+            <span class="fname">{{ sf.label }}</span>
+            <button
+              class="mini"
+              (click)="startRename(sf.name)"
+              [attr.aria-label]="'Rename ' + sf.label"
+              title="Rename"
             >
-            <div class="txt">
-              <a
-                [href]="b.url"
-                target="_blank"
-                rel="noopener noreferrer"
-                draggable="false"
-                >{{ b.title }}</a
-              >
-              <span class="dom"
-                >{{ b.domain }}@if (b.why) { · <i>{{ b.why }}</i> }</span
-              >
-            </div>
-            <span class="order rows">
+              ✎
+            </button>
+            }
+            <span class="count">{{ sf.items.length }}</span>
+            <span class="order">
               <button
                 class="mini"
-                (click)="nudgeBookmark(b, -1)"
-                [disabled]="first"
-                [attr.aria-label]="'Move ' + b.title + ' up'"
+                (click)="nudgeFolder(sf.name, -1)"
+                [disabled]="edge(sf.name, -1)"
+                [attr.aria-label]="'Move ' + sf.label + ' subfolder earlier'"
               >
                 ↑
               </button>
               <button
                 class="mini"
-                (click)="nudgeBookmark(b, 1)"
-                [disabled]="last"
-                [attr.aria-label]="'Move ' + b.title + ' down'"
+                (click)="nudgeFolder(sf.name, 1)"
+                [disabled]="edge(sf.name, 1)"
+                [attr.aria-label]="'Move ' + sf.label + ' subfolder later'"
               >
                 ↓
               </button>
+              <button
+                class="mini del-folder"
+                (click)="removeFolderFromReview(sf.name)"
+                [attr.aria-label]="'Remove the ' + sf.label + ' subfolder'"
+                title="Remove subfolder"
+              >
+                ✕
+              </button>
             </span>
-            <button
-              class="mini del"
-              (click)="deleteBookmark(b)"
-              [attr.aria-label]="'Delete ' + b.title"
-              title="Delete"
-            >
-              🗑
-            </button>
-            <select
-              (change)="move(b, $event)"
-              [attr.aria-label]="'Move ' + b.title"
-            >
-              @for (f of allFolders(); track f) {
-              <option [value]="f" [selected]="f === (b.folder || OTHER)">
-                {{ f }}
-              </option>
-              }
-            </select>
+          </h4>
+          <div class="items" [class.long]="sf.items.length > 7">
+            @for (b of sf.items; track b.id; let first = $first, last = $last) {
+            <ng-container
+              *ngTemplateOutlet="row; context: { $implicit: b, first, last }"
+            />
+            } @empty {
+            <p class="muted small empty">
+              {{ dragging() !== null ? 'Drop here' : 'Empty' }}
+            </p>
+            }
           </div>
-          } @empty {
-          <p class="muted small empty">
-            {{ dragging() !== null ? 'Drop here' : 'Empty' }}
-          </p>
+        </div>
+        } @if (movable(g.name)) {
+        <div class="sub-tools">
+          <input
+            #sfi
+            class="mini-input"
+            placeholder="+ Subfolder"
+            maxlength="28"
+            (keydown.enter)="addFolder(sfi, g.name)"
+            [attr.aria-label]="'New subfolder in ' + g.name"
+          />
+          @if (ai.state() === 'ready' && g.items.length >= 8 && !g.subs.length)
+          {
+          <button
+            class="ghost small"
+            (click)="suggestSubfolders(g.name)"
+            [disabled]="!!busy()"
+          >
+            ✨ Split into subfolders
+          </button>
           }
         </div>
+        }
       </section>
       }
     </div>
@@ -544,6 +646,71 @@
   <a href="https://webllm.mlc.ai" target="_blank" rel="noopener">WebLLM</a> ·
   Your bookmarks never leave your device.
 </footer>
+
+<ng-template #row let-b let-first="first" let-last="last">
+  <div
+    class="bm"
+    draggable="true"
+    [class.lifted]="dragging() === b.id"
+    [class.before]="dropBefore() === b.id && dragging() !== null"
+    (dragstart)="onDragStart(b, $event)"
+    (dragend)="onDragEnd()"
+    (dragover)="onDragOverRow(b, $event)"
+  >
+    <span class="grip" aria-hidden="true">⠿</span>
+    <span
+      class="av"
+      [style.background]="'hsl(' + hue(b) + ' 45% 88%)'"
+      [style.color]="'hsl(' + hue(b) + ' 45% 30%)'"
+      >{{ initial(b) }}</span
+    >
+    <div class="txt">
+      <a
+        [href]="b.url"
+        target="_blank"
+        rel="noopener noreferrer"
+        draggable="false"
+        >{{ b.title }}</a
+      >
+      <span class="dom"
+        >{{ b.domain }}@if (b.why) { · <i>{{ b.why }}</i> }</span
+      >
+    </div>
+    <span class="order rows">
+      <button
+        class="mini"
+        (click)="nudgeBookmark(b, -1)"
+        [disabled]="first"
+        [attr.aria-label]="'Move ' + b.title + ' up'"
+      >
+        ↑
+      </button>
+      <button
+        class="mini"
+        (click)="nudgeBookmark(b, 1)"
+        [disabled]="last"
+        [attr.aria-label]="'Move ' + b.title + ' down'"
+      >
+        ↓
+      </button>
+    </span>
+    <button
+      class="mini del"
+      (click)="deleteBookmark(b)"
+      [attr.aria-label]="'Delete ' + b.title"
+      title="Delete"
+    >
+      🗑
+    </button>
+    <select (change)="move(b, $event)" [attr.aria-label]="'Move ' + b.title">
+      @for (f of allFolders(); track f) {
+      <option [value]="f" [selected]="f === (b.folder || OTHER)">
+        {{ f }}
+      </option>
+      }
+    </select>
+  </div>
+</ng-template>
 
 <ng-template #helper>
   <section class="card helper">

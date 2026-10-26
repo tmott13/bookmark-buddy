@@ -13,13 +13,30 @@ import {
 import {
   BATCH,
   FALLBACK_FOLDERS,
+  folderKeywords,
   foldersPrompt,
+  keywordPick,
   parseFolders,
   parseSort,
+  overlaps,
   rememberable,
   sortPrompt,
+  subfoldersPrompt,
 } from "./sorter";
 import { sampleHtml } from "./sample";
+import {
+  SEP,
+  childrenOf,
+  isSub,
+  join,
+  keptPath,
+  labelOf,
+  normalizeFolders,
+  nudge,
+  parentOf,
+  placeTop,
+  renamePath,
+} from "./folders";
 import {
   ApplyResult,
   AutoState,
@@ -44,6 +61,8 @@ interface Stats {
   memory: number;
   gemma: number;
   seconds: number;
+  keyword?: number;
+  kept?: number;
 }
 interface Session {
   step: Step;
@@ -123,25 +142,34 @@ export class App {
   private stopFlag = false;
 
   readonly allFolders = computed(() => [...this.folders(), OTHER, MAYBE]);
+  /** Review screen: one card per top-level folder, with its subfolders inside it. */
   readonly groups = computed(() => {
     const q = this.filter().trim().toLowerCase();
-    return this.allFolders()
+    const list = this.folders();
+    const match = (b: Bookmark) =>
+      !q || b.title.toLowerCase().includes(q) || b.domain.includes(q);
+    const itemsIn = (name: string) =>
+      this.bookmarks().filter(
+        (b) => !b.deleted && (b.folder || OTHER) === name && match(b),
+      );
+    const dragging = this.dragging() !== null;
+    return [...list.filter((p) => !isSub(p)), OTHER, MAYBE]
       .map((name) => ({
         name,
-        items: this.bookmarks().filter(
-          (b) =>
-            !b.deleted &&
-            (b.folder || OTHER) === name &&
-            (!q || b.title.toLowerCase().includes(q) || b.domain.includes(q)),
-        ),
+        items: itemsIn(name),
+        subs: childrenOf(list, name)
+          .map((p) => ({ name: p, label: labelOf(p), items: itemsIn(p) }))
+          .filter((s) => s.items.length || dragging || !q),
       }))
       .filter(
         (g) =>
           g.items.length ||
-          this.dragging() !== null ||
+          g.subs.some((s) => s.items.length) ||
+          dragging ||
           (!q && g.name !== MAYBE && g.name !== OTHER),
       );
   });
+  readonly topFolders = computed(() => this.folders().filter((p) => !isSub(p)));
   /** Two columns that pack like a masonry wall (no gaps under short folders); one column on narrow screens. */
   private readonly mq =
     typeof matchMedia === "undefined" ? null : matchMedia("(min-width: 940px)");
@@ -154,7 +182,13 @@ export class App {
     for (const g of gs) {
       const i = h[0] <= h[1] ? 0 : 1; // next folder goes in the shorter column
       cols[i].push(g);
-      h[i] += 86 + Math.min(Math.max(g.items.length, 1), 7.6) * 50;
+      h[i] +=
+        86 +
+        Math.min(Math.max(g.items.length, 1), 7.6) * 50 +
+        g.subs.reduce(
+          (n, s) => n + 60 + Math.min(Math.max(s.items.length, 1), 7.6) * 50,
+          0,
+        );
     }
     return cols;
   });
@@ -275,7 +309,37 @@ export class App {
   }
 
   // ---------- 2. folders ----------
-  async suggestFolders() {
+  /** The person's own folders (top two levels), with how many bookmarks are in each. */
+  readonly ownFolders = computed(() => {
+    const counts = new Map<string, number>();
+    for (const b of this.bookmarks()) {
+      if (b.folder === MAYBE && b.why) continue;
+      const p = keptPath(b.oldPath, this.fromBrowser());
+      if (p) counts.set(p, (counts.get(p) ?? 0) + 1);
+    }
+    return normalizeFolders([...counts.keys()]);
+  });
+  readonly keptCount = computed(
+    () => this.bookmarks().filter((b) => b.pinned).length,
+  );
+  readonly isSub = isSub;
+  readonly labelOf = labelOf;
+
+  /** Start from the folders (and subfolders) the person already has. Bookmarks already in them stay put; only loose ones get sorted. */
+  keepMine() {
+    const own = this.ownFolders();
+    if (!own.length) return;
+    this.folders.set(own);
+    this.bookmarks.update((l) =>
+      l.map((b) => {
+        if (b.folder === MAYBE && b.why) return b;
+        const p = keptPath(b.oldPath, this.fromBrowser());
+        return { ...b, folder: p, pinned: !!p };
+      }),
+    );
+  }
+
+  async suggestFolders(mode: "replace" | "add" = "replace") {
     if (this.ai.state() !== "ready" || this.busy()) return;
     const pool = this.bookmarks().filter((b) => b.folder !== MAYBE);
     const n = IOS ? 30 : 60;
@@ -297,41 +361,168 @@ export class App {
         maxTokens: 90,
         temperature: 0.4,
       });
-      const f = parseFolders(raw);
-      this.folders.set(f.length >= 3 ? f : FALLBACK_FOLDERS);
+      const parsed = parseFolders(raw);
+      const f = parsed.length >= 3 ? parsed : FALLBACK_FOLDERS;
+      // Adding to the person's own folders: skip ideas that repeat one they already have ("Recipes & Cooking" next to "Recipes").
+      if (mode === "add")
+        this.folders.update((l) =>
+          normalizeFolders([
+            ...l,
+            ...f.filter(
+              (x) =>
+                !l.some(
+                  (y) => y.toLowerCase() === x.toLowerCase() || overlaps(y, x),
+                ),
+            ),
+          ]),
+        );
+      else {
+        this.folders.set(f);
+        this.bookmarks.update((l) =>
+          l.map((b) => (b.pinned ? { ...b, pinned: false, folder: "" } : b)),
+        );
+      }
     } catch (e) {
       console.warn(e);
-      this.folders.set(FALLBACK_FOLDERS);
+      if (mode === "replace") this.folders.set(FALLBACK_FOLDERS);
     } finally {
       this.busy.set("");
     }
   }
-  removeFolder(f: string) {
-    this.folders.update((list) => list.filter((x) => x !== f));
+  /** Remove a folder and its subfolders. On the folders step their bookmarks just get sorted again; on review they move up a level. */
+  removeFolder(f: string, review = false) {
+    const gone = (p: string) => p === f || p.startsWith(f + SEP);
+    const dest = review ? parentOf(f) || OTHER : "";
+    this.folders.update((list) => list.filter((x) => !gone(x)));
+    this.bookmarks.update((l) =>
+      l.map((b) =>
+        gone(b.folder) ? { ...b, folder: dest, pinned: false } : b,
+      ),
+    );
   }
-  addFolder(input: HTMLInputElement) {
-    const name = input.value.trim().slice(0, 28);
+  /** Review screen: remove a folder; anything in it goes to its parent (or "Other"). */
+  removeFolderFromReview(f: string) {
+    const n = this.bookmarks().filter(
+      (b) => !b.deleted && (b.folder === f || b.folder.startsWith(f + SEP)),
+    ).length;
+    if (n && !confirmRemoveFolder(labelOf(f), n, parentOf(f) || OTHER)) return;
+    this.removeFolder(f, true);
+  }
+  readonly editing = signal<string | null>(null);
+  startRename(name: string) {
+    this.editing.set(name);
+    setTimeout(() =>
+      (
+        document.querySelector("input.rename") as HTMLInputElement | null
+      )?.select(),
+    );
+  }
+  finishRename(old: string, e: Event) {
+    this.renameFolder(old, e);
+    this.editing.set(null);
+  }
+  private cleanName(v: string) {
+    return v.replace(/›/g, "-").trim().slice(0, 28);
+  }
+  addFolder(input: HTMLInputElement, parent = "") {
+    const label = this.cleanName(input.value);
+    const path = join(parent, label);
     if (
-      name &&
-      !this.allFolders().some((f) => f.toLowerCase() === name.toLowerCase())
-    )
-      this.folders.update((l) => [...l, name]);
+      label &&
+      !/^(other|maybe delete\??)$/i.test(label) &&
+      !this.allFolders().some((f) => f.toLowerCase() === path.toLowerCase())
+    ) {
+      this.folders.update((l) => normalizeFolders([...l, path]));
+    }
     input.value = "";
   }
+  /** The input holds just the folder's own name; a renamed parent takes its subfolders (and their bookmarks) with it. */
   renameFolder(old: string, e: Event) {
-    const name = (e.target as HTMLInputElement).value.trim().slice(0, 28);
+    const label = this.cleanName((e.target as HTMLInputElement).value);
+    const next = join(parentOf(old), label);
     if (
-      !name ||
-      name === old ||
-      this.allFolders().some((f) => f.toLowerCase() === name.toLowerCase())
+      !label ||
+      next === old ||
+      /^(other|maybe delete\??)$/i.test(label) ||
+      this.allFolders().some(
+        (f) => f !== old && f.toLowerCase() === next.toLowerCase(),
+      )
     ) {
-      (e.target as HTMLInputElement).value = old;
+      (e.target as HTMLInputElement).value = labelOf(old);
       return;
     }
-    this.folders.update((l) => l.map((f) => (f === old ? name : f)));
+    const map = renamePath(old, label);
+    this.folders.update((l) => l.map(map));
     this.bookmarks.update((l) =>
-      l.map((b) => (b.folder === old ? { ...b, folder: name } : b)),
+      l.map((b) =>
+        b.folder && map(b.folder) !== b.folder
+          ? { ...b, folder: map(b.folder) }
+          : b,
+      ),
     );
+  }
+
+  /** Review screen: Gemma looks inside a big folder and splits it into a few subfolders. */
+  async suggestSubfolders(parent: string) {
+    if (this.ai.state() !== "ready" || this.busy()) return;
+    const items = this.bookmarks().filter(
+      (b) => !b.deleted && b.folder === parent,
+    );
+    if (items.length < 4) return;
+    this.busy.set(`Gemma is looking inside “${parent}”…`);
+    try {
+      const raw = await this.ai.generate(subfoldersPrompt(parent, items), {
+        maxTokens: 50,
+        temperature: 0.4,
+      });
+      const names = parseFolders(raw)
+        .filter((n) => n.toLowerCase() !== parent.toLowerCase())
+        .slice(0, 4);
+      if (names.length < 2) {
+        this.error.set(
+          `Gemma didn't find a good way to split “${parent}”. You can add subfolders yourself.`,
+        );
+        return;
+      }
+      const subs = names.map((n) => join(parent, this.cleanName(n)));
+      this.folders.update((l) =>
+        normalizeFolders([...l, ...subs.filter((s) => !l.includes(s))]),
+      );
+      const all = childrenOf(this.folders(), parent);
+      const labels = all.map(labelOf);
+      const kw = folderKeywords(all);
+      this.busy.set(`Sorting “${parent}” into subfolders…`);
+      for (let i = 0; i < items.length; i += BATCH) {
+        const batch = items.slice(i, i + BATCH);
+        let picks: string[];
+        try {
+          picks = parseSort(
+            await this.ai.generate(sortPrompt(batch, labels), {
+              maxTokens: BATCH * 12 + 20,
+              temperature: 0,
+            }),
+            batch,
+            labels,
+          );
+        } catch {
+          picks = batch.map(() => OTHER);
+        }
+        const moves = new Map(
+          batch.map((b, k) => [
+            b.id,
+            keywordPick(b, kw) ??
+              (picks[k] === OTHER ? parent : join(parent, picks[k])),
+          ]),
+        );
+        this.bookmarks.update((l) =>
+          l.map((b) =>
+            moves.has(b.id) ? { ...b, folder: moves.get(b.id)! } : b,
+          ),
+        );
+      }
+    } finally {
+      this.busy.set("");
+    }
   }
 
   // ---------- 3. sorting ----------
@@ -339,17 +530,32 @@ export class App {
     if (this.ai.state() !== "ready" || !this.folders().length) return;
     const folders = this.folders();
     // Re-sorting starts fresh for everything except the app's own "Maybe delete?" rules.
+    const exists = new Set(folders);
     let list = this.bookmarks().map((b) =>
-      b.folder === MAYBE && b.why ? b : { ...b, folder: "" },
+      b.folder === MAYBE && b.why
+        ? b
+        : b.pinned && exists.has(b.folder)
+          ? b
+          : { ...b, folder: "", pinned: false },
     );
     const queue = list.filter((b) => !b.folder && !b.deleted);
+    const kept = list.filter((b) => b.pinned).length;
     this.todo.set(queue.length);
     this.done.set(0);
     this.step.set("sorting");
     this.stopFlag = false;
     const memory = new Map<string, { folder: string; count: number }>();
+    const keywords = folderKeywords(folders);
     let fromMemory = 0,
-      fromGemma = 0;
+      fromGemma = 0,
+      fromKeyword = 0;
+    const byGemma = new Set<number>();
+    // One sorted example per folder goes into each prompt, so Gemma stays consistent from batch to batch.
+    const examples = new Map<string, Bookmark>();
+    const example = (b: Bookmark, folder: string) => {
+      if (folder !== OTHER && !examples.has(folder))
+        examples.set(folder, { ...b, folder });
+    };
     const started = performance.now();
     let gemmaMs = 0,
       gemmaCalls = 0;
@@ -365,10 +571,25 @@ export class App {
         const b = queue[i++];
         const m = rememberable(b.domain) ? memory.get(b.domain) : undefined;
         const known = m && m.count >= 2 ? m.folder : undefined; // trust a site only after Gemma agreed with itself twice
+        const named = known ? undefined : keywordPick(b, keywords); // "Easy taco recipe" clearly belongs in Recipes
         if (known) {
           assign(b.id, known);
           fromMemory++;
           this.done.update((n) => n + 1);
+        } else if (named) {
+          assign(b.id, named);
+          fromKeyword++;
+          example(b, named);
+          this.done.update((n) => n + 1);
+          if (rememberable(b.domain)) {
+            const k = memory.get(b.domain);
+            memory.set(
+              b.domain,
+              k && k.folder === named
+                ? { folder: named, count: k.count + 1 }
+                : (k ?? { folder: named, count: 1 }),
+            );
+          }
         } else batch.push(b);
       }
       if (batch.length) {
@@ -376,10 +597,10 @@ export class App {
         const t0 = performance.now();
         let picks: string[];
         try {
-          const raw = await this.ai.generate(sortPrompt(batch, folders), {
-            maxTokens: BATCH * 9 + 20,
-            temperature: 0.2,
-          });
+          const raw = await this.ai.generate(
+            sortPrompt(batch, folders, [...examples.values()].slice(0, 8)),
+            { maxTokens: BATCH * 12 + 20, temperature: 0 },
+          );
           picks = parseSort(raw, batch, folders);
         } catch (e) {
           console.warn(e);
@@ -389,6 +610,8 @@ export class App {
         gemmaCalls++;
         batch.forEach((b, k) => {
           assign(b.id, picks[k]);
+          byGemma.add(b.id);
+          example(b, picks[k]);
           if (!rememberable(b.domain) || picks[k] === OTHER) return;
           const m = memory.get(b.domain);
           memory.set(
@@ -411,6 +634,21 @@ export class App {
       }
       this.bookmarks.set(list);
     }
+    // Same site, same folder: if Gemma put most of a site's bookmarks in one folder, its odd ones out join them.
+    const bySite = new Map<string, Bookmark[]>();
+    for (const b of list)
+      if (b.folder && b.folder !== MAYBE && rememberable(b.domain))
+        bySite.set(b.domain, [...(bySite.get(b.domain) ?? []), b]);
+    for (const items of bySite.values()) {
+      if (items.length < 3) continue;
+      const counts = new Map<string, number>();
+      for (const b of items)
+        counts.set(b.folder, (counts.get(b.folder) ?? 0) + 1);
+      const [top, n] = [...counts].sort((a, b) => b[1] - a[1])[0];
+      if (top === OTHER || n / items.length < 0.6) continue;
+      for (const b of items)
+        if (b.folder !== top && byGemma.has(b.id)) assign(b.id, top);
+    }
     // Anything not reached (if stopped) still goes somewhere, so nothing is lost.
     list = list.map((b) => (b.folder ? b : { ...b, folder: OTHER }));
     this.bookmarks.set(list);
@@ -418,6 +656,8 @@ export class App {
       ...s,
       memory: fromMemory,
       gemma: fromGemma,
+      keyword: fromKeyword,
+      kept,
       seconds: Math.round((performance.now() - started) / 1000),
     }));
     this.busy.set("");
@@ -456,6 +696,7 @@ export class App {
   }
   onDragOverGroup(name: string, e: DragEvent) {
     if (this.draggingFolder() !== null) {
+      name = parentOf(name) || name; // folders are reordered by their top-level card
       if (!this.movable(name)) return;
       e.preventDefault();
       this.folderTarget.set(name);
@@ -493,7 +734,7 @@ export class App {
     e.preventDefault();
     const folder = this.draggingFolder();
     if (folder !== null) {
-      this.placeFolder(folder, name);
+      this.placeFolder(folder, parentOf(name) || name);
     } else {
       const id =
         this.dragging() ?? Number(e.dataTransfer?.getData("text/plain"));
@@ -565,25 +806,25 @@ export class App {
     setTimeout(() => this.draggingFolder.set(name));
   }
   private placeFolder(name: string, target: string) {
-    if (name === target || !this.movable(target)) return;
-    this.folders.update((l) => {
-      const rest = l.filter((f) => f !== name);
-      const from = l.indexOf(name),
-        to = l.indexOf(target);
-      const at = rest.indexOf(target) + (from < to ? 1 : 0); // dragging down lands after the target, up lands before it
-      rest.splice(at, 0, name);
-      return rest;
-    });
+    if (
+      name === target ||
+      !this.movable(target) ||
+      isSub(name) ||
+      isSub(target)
+    )
+      return;
+    this.folders.update((l) => placeTop(l, name, target)); // dragging down lands after the target, up lands before it
   }
   nudgeFolder(name: string, dir: -1 | 1) {
-    this.folders.update((l) => {
-      const i = l.indexOf(name),
-        j = i + dir;
-      if (i < 0 || j < 0 || j >= l.length) return l;
-      const out = [...l];
-      [out[i], out[j]] = [out[j], out[i]];
-      return out;
-    });
+    this.folders.update((l) => nudge(l, name, dir));
+  }
+  /** Disable ↑ on the first and ↓ on the last folder among its siblings. */
+  edge(name: string, dir: -1 | 1) {
+    const l = this.folders();
+    const sibs = isSub(name)
+      ? childrenOf(l, parentOf(name))
+      : l.filter((p) => !isSub(p));
+    return dir < 0 ? sibs[0] === name : sibs[sibs.length - 1] === name;
   }
 
   // Deleting is always the person's choice, and reversible until Apply (and after, with Undo everything).
@@ -706,12 +947,13 @@ export class App {
     try {
       for (let i = 0; i < list.length; i += BATCH) {
         const batch = list.slice(i, i + BATCH);
+        const kw = folderKeywords(folders);
         let picks: string[];
         try {
           picks = parseSort(
             await this.ai.generate(sortPrompt(batch, folders), {
-              maxTokens: BATCH * 9 + 20,
-              temperature: 0.2,
+              maxTokens: BATCH * 12 + 20,
+              temperature: 0,
             }),
             batch,
             folders,
@@ -719,6 +961,7 @@ export class App {
         } catch {
           picks = batch.map(() => OTHER);
         }
+        picks = picks.map((p, k) => keywordPick(batch[k], kw) ?? p);
         for (const [k, b] of batch.entries())
           if (b.chromeId)
             await moveTo(b.chromeId, a.folders[picks[k]] ? picks[k] : OTHER);
@@ -752,6 +995,16 @@ function confirmDelete(n: number, folder: string) {
   try {
     return confirm(
       `Mark all ${n} bookmarks in “${folder}” for deleting? You can restore them until you apply.`,
+    );
+  } catch {
+    return true;
+  }
+}
+
+function confirmRemoveFolder(f: string, n: number, dest: string) {
+  try {
+    return confirm(
+      `Remove the “${f}” folder? Its ${n} bookmark${n === 1 ? "" : "s"} will move to “${dest}”.`,
     );
   } catch {
     return true;

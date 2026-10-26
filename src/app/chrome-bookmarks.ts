@@ -5,6 +5,7 @@
  */
 import { Bookmark, MAYBE, OTHER, domainOf, normalize } from "./bookmarks";
 import { rememberable } from "./sorter";
+import { SEP, labelOf, parentOf } from "./folders";
 
 declare const chrome: any;
 
@@ -160,19 +161,26 @@ export async function applyTidy(
     ];
     const keepList = list.filter((b) => !b.deleted);
     const used = new Set(keepList.map((b) => b.folder || OTHER));
+    for (const f of [...used]) if (f.includes(SEP)) used.add(parentOf(f)); // a used subfolder needs its parent
     const ids: Record<string, string> = {};
     for (const name of order) {
       if (!used.has(name)) continue;
-      const existing = (bar.children ?? []).find(
-        (c) => !c.url && c.title.toLowerCase() === name.toLowerCase(),
+      const parentId = parentOf(name) ? ids[parentOf(name)] : bar.id;
+      if (!parentId) continue;
+      const siblings: Node[] =
+        parentId === bar.id
+          ? (bar.children ?? [])
+          : await chrome.bookmarks.getChildren(parentId);
+      const existing = siblings.find(
+        (c) => !c.url && c.title.toLowerCase() === labelOf(name).toLowerCase(),
       );
       if (existing) {
         ids[name] = existing.id;
         continue;
       }
       const made = await chrome.bookmarks.create({
-        parentId: bar.id,
-        title: name,
+        parentId,
+        title: labelOf(name),
       });
       ids[name] = made.id;
       snap.created.push(made.id);
@@ -346,8 +354,8 @@ export async function undoTidy(): Promise<boolean> {
         /* gone */
       }
     }
-    // Remove the folders Bookmark Buddy created, if they're empty now.
-    for (const id of snap.created) {
+    // Remove the folders Bookmark Buddy created, if they're empty now (subfolders first, they were created after their parents).
+    for (const id of [...snap.created].reverse()) {
       try {
         const kids = await chrome.bookmarks.getChildren(id);
         if (!kids.length) await chrome.bookmarks.remove(id);
@@ -401,13 +409,16 @@ export async function ensureFolder(
       /* deleted; make a new one */
     }
   }
-  const kids = (await chrome.bookmarks.getChildren(auto.barId)) as Node[];
+  const parentId = parentOf(name)
+    ? await ensureFolder(auto, parentOf(name))
+    : auto.barId; // a subfolder lives in its parent
+  const kids = (await chrome.bookmarks.getChildren(parentId)) as Node[];
   const same = kids.find(
-    (k) => !k.url && k.title.toLowerCase() === name.toLowerCase(),
+    (k) => !k.url && k.title.toLowerCase() === labelOf(name).toLowerCase(),
   );
   let id = same?.id;
   if (!id) {
-    id = (await chrome.bookmarks.create({ parentId: auto.barId, title: name }))
+    id = (await chrome.bookmarks.create({ parentId, title: labelOf(name) }))
       .id as string;
     const snap = await loadSnapshot();
     if (snap) {

@@ -732,3 +732,106 @@ button.mini.wide-mini {
     max-width: 150px;
   }
 }
+
+/* folder editing on the review screen */
+.fname {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+h3 input.rename {
+  font: inherit;
+  font-weight: 700;
+  min-width: 0;
+  flex: 1;
+  max-width: 240px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  border: 1.5px solid var(--moss-2);
+  background: #fff;
+  color: var(--bark);
+}
+button.mini.del-folder:not(:disabled):hover {
+  background: #f7e1da;
+  color: #9b3b2a;
+}
+.tool-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tool-row .add-folder {
+  min-width: 150px;
+  max-width: 200px;
+}
+
+/* subfolders */
+.choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--leaf);
+  border-radius: 14px;
+  padding: 10px 14px;
+  margin: 4px 0 12px;
+  font-size: 0.92rem;
+}
+.fchip.sub {
+  background: #f3f6ee;
+}
+.sub-mark {
+  color: var(--muted);
+  font-weight: 700;
+  padding-left: 8px;
+}
+.subgroup {
+  margin: 10px 0 0 10px;
+  padding: 6px 0 2px 12px;
+  border-left: 3px solid var(--leaf);
+  border-radius: 0 12px 12px 0;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.subgroup.target {
+  border-left-color: var(--moss-2);
+  background: var(--leaf);
+}
+h4 {
+  font-size: 0.92rem;
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+h4 .count {
+  margin-left: auto;
+}
+.subgroup .items {
+  max-height: 300px;
+}
+.sub-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.mini-input {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1.5px dashed var(--line);
+  background: transparent;
+  width: 150px;
+}
+.mini-input:focus {
+  border-style: solid;
+  border-color: var(--moss-2);
+  background: #fff;
+  outline: none;
+}

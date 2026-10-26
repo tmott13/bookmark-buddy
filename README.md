@@ -17,9 +17,9 @@ Built for the DEV Hacktoberfest Open-Source AI Challenge, Week 3: Slow and Stead
 
 1. **Export** your bookmarks as HTML from Chrome, Edge, Safari or Firefox (they all use the same format).
 2. **Drop the file in.** The app reads it locally and finds exact duplicates on its own, ignoring http/https, `www`, trailing slashes and tracking codes like `utm_source`. Old `localhost` links get flagged too.
-3. **Gemma suggests 6–9 folders** from a sample of your bookmark titles. Rename, remove or add any.
-4. **Gemma sorts everything**, a dozen bookmarks at a time. Once Gemma has put the same site in the same folder twice, the rest of that site's bookmarks follow automatically (except big "everything" sites like YouTube or Reddit).
-5. **Review**: drag bookmarks between folders or into a new order, reorder the folders themselves, delete anything you don't want (🗑, restorable until you finish), and **download** a clean bookmarks file to import back.
+3. **Gemma suggests 6–9 folders** from a sample of your bookmark titles. Rename, remove or add any. Already organized? **Keep my folders** keeps your folders and subfolders (two levels), leaves the bookmarks in them alone, and only sorts the loose ones. **Add Gemma's ideas** adds new folders that don't repeat yours.
+4. **Gemma sorts everything**, a few bookmarks at a time, with already-sorted examples so similar bookmarks land together. Obvious matches (a title or site that names a folder, like "taco recipe" → Recipes) are filed by the app without asking Gemma. Once Gemma has put the same site in the same folder twice, the rest of that site's bookmarks follow automatically (except big "everything" sites like YouTube or Reddit).
+5. **Review**: drag bookmarks between folders or into a new order, rename, add, remove or reorder folders and subfolders (add your own, or let Gemma **split a big folder into subfolders**), delete anything you don't want (🗑, restorable until you finish), and **download** a clean bookmarks file to import back.
 
 ## The extension
 

@@ -12,9 +12,11 @@ export interface Bookmark {
   folder: string; // where Bookmark Buddy put it
   why?: string; // short reason for rule-based moves
   deleted?: boolean; // the person chose to delete it (left out of the export / removed on Apply)
+  pinned?: boolean; // already in one of the person's own folders they chose to keep, so it isn't re-sorted
 }
 
 export const MAYBE = "Maybe delete?";
+const SEP = " › "; // folder › subfolder (see folders.ts)
 export const OTHER = "Other";
 
 /** Parse the standard "Netscape bookmark file" that Chrome, Edge, Firefox and Safari all export. */
@@ -157,22 +159,40 @@ export function exportBookmarks(
     `    <DT><H3 ADD_DATE="${now}">${esc(rootName)}</H3>`,
     "    <DL><p>",
   ];
-  for (const f of order) {
-    const items = list.filter((b) => !b.deleted && (b.folder || OTHER) === f);
-    if (!items.length) continue;
+  const link = (b: Bookmark, pad: string) => {
+    const attrs = [
+      `HREF="${esc(b.url)}"`,
+      b.addDate ? `ADD_DATE="${esc(b.addDate)}"` : "",
+      b.icon ? `ICON="${esc(b.icon)}"` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    lines.push(`${pad}<DT><A ${attrs}>${esc(b.title)}</A>`);
+  };
+  const itemsIn = (f: string) =>
+    list.filter((b) => !b.deleted && (b.folder || OTHER) === f);
+  const hasAny = (f: string) =>
+    list.some(
+      (b) =>
+        !b.deleted &&
+        ((b.folder || OTHER) === f || (b.folder ?? "").startsWith(f + SEP)),
+    );
+  for (const f of order.filter((x) => !x.includes(SEP))) {
+    if (!hasAny(f)) continue;
     lines.push(
       `        <DT><H3 ADD_DATE="${now}">${esc(f)}</H3>`,
       "        <DL><p>",
     );
-    for (const b of items) {
-      const attrs = [
-        `HREF="${esc(b.url)}"`,
-        b.addDate ? `ADD_DATE="${esc(b.addDate)}"` : "",
-        b.icon ? `ICON="${esc(b.icon)}"` : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-      lines.push(`            <DT><A ${attrs}>${esc(b.title)}</A>`);
+    for (const b of itemsIn(f)) link(b, "            ");
+    for (const sub of order.filter((x) => x.startsWith(f + SEP))) {
+      const items = itemsIn(sub);
+      if (!items.length) continue;
+      lines.push(
+        `            <DT><H3 ADD_DATE="${now}">${esc(sub.slice(f.length + SEP.length))}</H3>`,
+        "            <DL><p>",
+      );
+      for (const b of items) link(b, "                ");
+      lines.push("            </DL><p>");
     }
     lines.push("        </DL><p>");
   }

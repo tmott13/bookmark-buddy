@@ -8,7 +8,13 @@
  *  - If Gemma isn't available, the bookmark waits in "Needs a home" until you open Buddy.
  */
 import { MAYBE, OTHER, domainOf, normalize } from "../src/app/bookmarks";
-import { parseSort, rememberable, sortPrompt } from "../src/app/sorter";
+import {
+  folderKeywords,
+  keywordPick,
+  parseSort,
+  rememberable,
+  sortPrompt,
+} from "../src/app/sorter";
 import {
   AutoState,
   NEEDS_HOME,
@@ -54,6 +60,21 @@ chrome.bookmarks.onCreated.addListener(async (id: string, node: any) => {
   } else if (rememberable(domain) && (auto.memory[domain]?.count ?? 0) >= 2) {
     target = auto.memory[domain].folder;
     why = `Other ${domain} bookmarks live there.`;
+  } else if (
+    (target =
+      keywordPick(
+        {
+          id: 0,
+          title: node.title || "",
+          url: node.url,
+          domain,
+          oldPath: "",
+          folder: "",
+        },
+        folderKeywords(sortable(auto)),
+      ) ?? "")
+  ) {
+    why = `It sounds like a “${target}” bookmark.`;
   } else {
     const pick = await askGemma(auto, node.title || node.url, domain);
     if (pick) {
@@ -158,6 +179,11 @@ async function isDuplicate(id: string, url: string) {
   return false;
 }
 
+const sortable = (auto: AutoState) =>
+  Object.keys(auto.folders).filter(
+    (f) => f !== OTHER && f !== MAYBE && f !== NEEDS_HOME,
+  );
+
 async function learn(auto: AutoState, url: string, folder: string) {
   const d = domainOf(url);
   if (!rememberable(d)) return;
@@ -176,9 +202,7 @@ async function askGemma(
   title: string,
   domain: string,
 ): Promise<string | null> {
-  const folders = Object.keys(auto.folders).filter(
-    (f) => f !== OTHER && f !== MAYBE && f !== NEEDS_HOME,
-  );
+  const folders = sortable(auto);
   if (!auto.model || !folders.length) return null;
   try {
     await ensureOffscreen();
